@@ -33,18 +33,16 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    # 1. โหลดตัวรัน Docker แบบพกพามาไว้ชั่วคราว (แก้ปัญหา docker: not found)
+                    # โหลด Docker CLI เวอร์ชันใหม่ขึ้น (26.0.0) เพื่อให้คุยกับ Docker Desktop ปัจจุบันรู้เรื่อง
                     if ! command -v docker &> /dev/null; then
-                        echo "Docker CLI not found. Downloading..."
-                        curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-20.10.24.tgz -o docker.tgz
+                        echo "Downloading updated Docker CLI..."
+                        curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-26.0.0.tgz -o docker.tgz
                         tar xzvf docker.tgz
                         export PATH=$PATH:$(pwd)/docker
                     fi
                     
-                    # 2. ทำการ Build Image
                     docker build -t narin7/my-nginx-web:${BUILD_NUMBER} -t narin7/my-nginx-web:latest .
                     
-                    # 3. ส่ง Image ขึ้น Docker Hub
                     docker push narin7/my-nginx-web:${BUILD_NUMBER}
                     docker push narin7/my-nginx-web:latest
                     '''
