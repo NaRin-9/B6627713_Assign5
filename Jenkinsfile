@@ -58,14 +58,14 @@ pipeline {
                             chmod +x ./kubectl
                         fi
                         
-                        # 1. ก๊อปปี้ไฟล์กุญแจมาไว้ชั่วคราว
+                        # 1. ก๊อปปี้ไฟล์กุญแจมาเตรียมไว้
                         cp $KUBECONFIG_PATH ./kubeconfig_tmp
                         
-                        # 2. แอบเปลี่ยน IP จาก 127.0.0.1 เป็น host.docker.internal เพื่อให้ทะลุออกไปหา Windows
+                        # 2. แปลง IP ให้ทะลุกลับไปหา Windows ของคุณ
                         sed -i 's/127.0.0.1/host.docker.internal/g' ./kubeconfig_tmp
                         sed -i 's/0.0.0.0/host.docker.internal/g' ./kubeconfig_tmp
                         
-                        # 3. ชี้ให้ kubectl มาใช้ไฟล์กุญแจที่แก้ IP แล้ว
+                        # 3. เซ็ตค่าให้ kubectl ใช้ไฟล์ที่แปลง IP แล้ว
                         export KUBECONFIG=$(pwd)/kubeconfig_tmp
                         
                         ./kubectl apply -f k8s/deployment.yaml
@@ -84,7 +84,6 @@ pipeline {
                 withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG_PATH')]) {
                     script {
                         sh '''
-                        # ทำเหมือนกันในขั้นตอนนี้
                         cp $KUBECONFIG_PATH ./kubeconfig_tmp
                         sed -i 's/127.0.0.1/host.docker.internal/g' ./kubeconfig_tmp
                         sed -i 's/0.0.0.0/host.docker.internal/g' ./kubeconfig_tmp
@@ -99,8 +98,13 @@ pipeline {
                 }
             }
         }
+    }
 
     post {
+        always {
+            // ลบไฟล์กุญแจชั่วคราวทิ้งทุกครั้งที่รันเสร็จเพื่อความปลอดภัย
+            sh "rm -f kubeconfig_tmp || true"
+        }
         success {
             echo "Deployment successful! Access at http://7713.jenkins"
         }
