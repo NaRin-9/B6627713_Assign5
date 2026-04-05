@@ -58,15 +58,15 @@ pipeline {
                             chmod +x ./kubectl
                         fi
                         
-                        # 1. ก๊อปปี้ไฟล์กุญแจมาเตรียมไว้
-                        cp $KUBECONFIG_PATH ./kubeconfig_tmp
+                        # 1. ก๊อปปี้ไฟล์กุญแจ (ใส่ " " ครอบไว้กัน Error ช่องว่าง)
+                        cp "$KUBECONFIG_PATH" ./kubeconfig_tmp
                         
                         # 2. แปลง IP ให้ทะลุกลับไปหา Windows ของคุณ
                         sed -i 's/127.0.0.1/host.docker.internal/g' ./kubeconfig_tmp
                         sed -i 's/0.0.0.0/host.docker.internal/g' ./kubeconfig_tmp
                         
                         # 3. เซ็ตค่าให้ kubectl ใช้ไฟล์ที่แปลง IP แล้ว
-                        export KUBECONFIG=$(pwd)/kubeconfig_tmp
+                        export KUBECONFIG="$(pwd)/kubeconfig_tmp"
                         
                         ./kubectl apply -f k8s/deployment.yaml
                         ./kubectl apply -f k8s/service.yaml
@@ -84,10 +84,10 @@ pipeline {
                 withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG_PATH')]) {
                     script {
                         sh '''
-                        cp $KUBECONFIG_PATH ./kubeconfig_tmp
+                        cp "$KUBECONFIG_PATH" ./kubeconfig_tmp
                         sed -i 's/127.0.0.1/host.docker.internal/g' ./kubeconfig_tmp
                         sed -i 's/0.0.0.0/host.docker.internal/g' ./kubeconfig_tmp
-                        export KUBECONFIG=$(pwd)/kubeconfig_tmp
+                        export KUBECONFIG="$(pwd)/kubeconfig_tmp"
                         
                         ./kubectl rollout status deployment/nginx-deployment --timeout=120s
                         ./kubectl get pods
@@ -102,7 +102,6 @@ pipeline {
 
     post {
         always {
-            // ลบไฟล์กุญแจชั่วคราวทิ้งทุกครั้งที่รันเสร็จเพื่อความปลอดภัย
             sh "rm -f kubeconfig_tmp || true"
         }
         success {
