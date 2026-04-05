@@ -32,13 +32,22 @@ pipeline {
         stage('Build & Push Docker Image') {
             steps {
                 script {
-                    // 1. Build Image โดยใส่ Username นำหน้า เพื่อเตรียมส่งขึ้น Docker Hub
-                    sh "docker build -t ${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG} -t ${DOCKER_USER}/${APP_NAME}:latest ."
+                    sh '''
+                    # 1. โหลดตัวรัน Docker แบบพกพามาไว้ชั่วคราว (แก้ปัญหา docker: not found)
+                    if ! command -v docker &> /dev/null; then
+                        echo "Docker CLI not found. Downloading..."
+                        curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-20.10.24.tgz -o docker.tgz
+                        tar xzvf docker.tgz
+                        export PATH=$PATH:$(pwd)/docker
+                    fi
                     
-                    // 2. Push Image ขึ้นไปเก็บบน Docker Hub (Kind Cluster จะได้ดึงไปติดตั้งได้)
-                    // (ถ้าตอนรันติดปัญหา Unauthenticated ให้ไปรันคำสั่ง docker login ใน PowerShell ที่เครื่อง Windows ก่อน 1 ครั้งครับ)
-                    sh "docker push ${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG}"
-                    sh "docker push ${DOCKER_USER}/${APP_NAME}:latest"
+                    # 2. ทำการ Build Image
+                    docker build -t narin7/my-nginx-web:${BUILD_NUMBER} -t narin7/my-nginx-web:latest .
+                    
+                    # 3. ส่ง Image ขึ้น Docker Hub
+                    docker push narin7/my-nginx-web:${BUILD_NUMBER}
+                    docker push narin7/my-nginx-web:latest
+                    '''
                 }
             }
         }
