@@ -62,9 +62,9 @@ pipeline {
                         # ชี้ที่อยู่ไฟล์ไปที่ที่ Jenkins เตรียมไว้ให้เลย ไม่ต้อง echo สร้างไฟล์เองแล้ว
                         export KUBECONFIG=$KUBECONFIG_PATH
                         
-                        ./kubectl apply -f jenkins/deployment.yaml
-                        ./kubectl apply -f jenkins/service.yaml
-                        ./kubectl apply -f jenkins/ingress.yaml
+                        ./kubectl apply -f k8s/deployment.yaml
+                        ./kubectl apply -f k8s/service.yaml
+                        ./kubectl apply -f k8s/ingress.yaml
                         
                         ./kubectl set image deployment/nginx-deployment nginx-container=${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG}
                         '''
