@@ -10,7 +10,6 @@ pipeline {
     }
 
     environment {
-        // ตั้งค่าตัวแปรต่างๆ ให้เรียบร้อย
         DOCKER_USER = 'narin7'
         APP_NAME    = 'my-nginx-web'
         IMAGE_TAG   = "${BUILD_NUMBER}"
@@ -50,7 +49,8 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                withCredentials([string(credentialsId: 'kubeconfig-local', variable: 'KUBECONFIG_TXT')]) {
+                // เปลี่ยนมาใช้แบบ file และเรียกชื่อ ID ใหม่
+                withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG_PATH')]) {
                     script {
                         sh '''
                         if [ ! -f "./kubectl" ]; then
@@ -59,15 +59,13 @@ pipeline {
                             chmod +x ./kubectl
                         fi
                         
-                        echo "$KUBECONFIG_TXT" > kubeconfig_tmp
-                        export KUBECONFIG=$(pwd)/kubeconfig_tmp
+                        # ชี้ที่อยู่ไฟล์ไปที่ที่ Jenkins เตรียมไว้ให้เลย ไม่ต้อง echo สร้างไฟล์เองแล้ว
+                        export KUBECONFIG=$KUBECONFIG_PATH
                         
-                        # รันไฟล์ YAML (ถ้าโฟลเดอร์ใน GitHub ของคุณชื่ออื่นที่ไม่ใช่ jenkins/ ให้แก้ตรงนี้ด้วยนะครับ)
                         ./kubectl apply -f jenkins/deployment.yaml
                         ./kubectl apply -f jenkins/service.yaml
                         ./kubectl apply -f jenkins/ingress.yaml
                         
-                        # อัปเดตเวอร์ชัน Image
                         ./kubectl set image deployment/nginx-deployment nginx-container=${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG}
                         '''
                     }
@@ -77,10 +75,10 @@ pipeline {
 
         stage('Verify Deployment') {
             steps {
-                withCredentials([string(credentialsId: 'kubeconfig-local', variable: 'KUBECONFIG_TXT')]) {
+                withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG_PATH')]) {
                     script {
                         sh '''
-                        export KUBECONFIG=$(pwd)/kubeconfig_tmp
+                        export KUBECONFIG=$KUBECONFIG_PATH
                         
                         ./kubectl rollout status deployment/nginx-deployment --timeout=120s
                         ./kubectl get pods
@@ -94,9 +92,6 @@ pipeline {
     }
 
     post {
-        always {
-            sh "rm -f kubeconfig_tmp || true"
-        }
         success {
             echo "Deployment successful! Access at http://7713.jenkins"
         }
