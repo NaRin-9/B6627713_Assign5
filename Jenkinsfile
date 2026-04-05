@@ -58,21 +58,19 @@ pipeline {
                             chmod +x ./kubectl
                         fi
                         
-                        # 1. ก๊อปปี้ไฟล์กุญแจ (ใส่ " " ครอบไว้กัน Error ช่องว่าง)
                         cp "$KUBECONFIG_PATH" ./kubeconfig_tmp
                         
-                        # 2. แปลง IP ให้ทะลุกลับไปหา Windows ของคุณ
                         sed -i 's/127.0.0.1/host.docker.internal/g' ./kubeconfig_tmp
                         sed -i 's/0.0.0.0/host.docker.internal/g' ./kubeconfig_tmp
                         
-                        # 3. เซ็ตค่าให้ kubectl ใช้ไฟล์ที่แปลง IP แล้ว
                         export KUBECONFIG="$(pwd)/kubeconfig_tmp"
                         
-                        ./kubectl apply -f k8s/deployment.yaml
-                        ./kubectl apply -f k8s/service.yaml
-                        ./kubectl apply -f k8s/ingress.yaml
+                        # เพิ่ม --insecure-skip-tls-verify=true เพื่อข้ามการตรวจ Certificate
+                        ./kubectl apply -f k8s/deployment.yaml --insecure-skip-tls-verify=true
+                        ./kubectl apply -f k8s/service.yaml --insecure-skip-tls-verify=true
+                        ./kubectl apply -f k8s/ingress.yaml --insecure-skip-tls-verify=true
                         
-                        ./kubectl set image deployment/nginx-deployment nginx-container=${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG}
+                        ./kubectl set image deployment/nginx-deployment nginx-container=${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG} --insecure-skip-tls-verify=true
                         '''
                     }
                 }
@@ -89,10 +87,11 @@ pipeline {
                         sed -i 's/0.0.0.0/host.docker.internal/g' ./kubeconfig_tmp
                         export KUBECONFIG="$(pwd)/kubeconfig_tmp"
                         
-                        ./kubectl rollout status deployment/nginx-deployment --timeout=120s
-                        ./kubectl get pods
-                        ./kubectl get svc
-                        ./kubectl get ingress
+                        # เพิ่ม --insecure-skip-tls-verify=true ตรงนี้ด้วย
+                        ./kubectl rollout status deployment/nginx-deployment --timeout=120s --insecure-skip-tls-verify=true
+                        ./kubectl get pods --insecure-skip-tls-verify=true
+                        ./kubectl get svc --insecure-skip-tls-verify=true
+                        ./kubectl get ingress --insecure-skip-tls-verify=true
                         '''
                     }
                 }
