@@ -59,21 +59,28 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                // เรียกใช้ กุญแจ Kubeconfig ที่เราเซฟไว้ใน Credentials
                 withCredentials([string(credentialsId: 'kubeconfig-local', variable: 'KUBECONFIG_TXT')]) {
                     script {
                         sh '''
-                        # สร้างไฟล์ config ชั่วคราวให้ kubectl ใช้
+                        # 1. โหลดโปรแกรม kubectl มาไว้ในโปรเจกต์ (ถ้ายังไม่มี)
+                        if [ ! -f "./kubectl" ]; then
+                            echo "Downloading kubectl..."
+                            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                            chmod +x ./kubectl
+                        fi
+                        
+                        # 2. เตรียมไฟล์กุญแจ Kubeconfig
                         echo "$KUBECONFIG_TXT" > kubeconfig_tmp
                         export KUBECONFIG=$(pwd)/kubeconfig_tmp
                         
-                        # ⚠️ ตรวจสอบ Path: ถ้าไฟล์ YAML ของคุณอยู่ในโฟลเดอร์ jenkins ให้เปลี่ยนจาก k8s/ เป็น jenkins/ นะครับ
-                        kubectl apply -f k8s/deployment.yaml
-                        kubectl apply -f k8s/service.yaml
-                        kubectl apply -f k8s/ingress.yaml
+                        # 3. เริ่ม Deploy (สังเกตว่าเราจะใช้ ./kubectl แทน kubectl เฉยๆ)
+                        # ⚠️ สำคัญ: ถ้าไฟล์ของคุณอยู่ในโฟลเดอร์ jenkins ให้เปลี่ยนคำว่า k8s เป็น jenkins ด้วยนะครับ
+                        ./kubectl apply -f jenkins/deployment.yaml
+                        ./kubectl apply -f jenkins/service.yaml
+                        ./kubectl apply -f jenkins/ingress.yaml
                         
-                        # สั่งเปลี่ยน Image ใน Deployment ให้เป็นเวอร์ชันใหม่ล่าสุดที่เพิ่ง Build
-                        kubectl set image deployment/nginx-deployment nginx-container=${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG}
+                        # สั่งอัปเดต Image เป็นเวอร์ชันล่าสุดที่เพิ่ง Build
+                        ./kubectl set image deployment/nginx-deployment nginx-container=narin7/my-nginx-web:${BUILD_NUMBER}
                         '''
                     }
                 }
@@ -87,17 +94,18 @@ pipeline {
                         sh '''
                         export KUBECONFIG=$(pwd)/kubeconfig_tmp
                         
-                        kubectl rollout status deployment/nginx-deployment --timeout=120s
-                        kubectl get pods -l app=my-nginx
-                        kubectl get svc nginx-service
-                        kubectl get ingress nginx-ingress
+                        # รอเช็คสถานะว่า Pods รันขึ้นมาครบไหม (ใช้ ./kubectl เช่นกัน)
+                        ./kubectl rollout status deployment/nginx-deployment --timeout=120s
+                        
+                        # ดูสถานะต่างๆ
+                        ./kubectl get pods
+                        ./kubectl get svc
+                        ./kubectl get ingress
                         '''
                     }
                 }
             }
         }
-    }
-
     post {
         always {
             // ทำความสะอาด ลบไฟล์กุญแจทิ้งทุกครั้งที่รันเสร็จเพื่อความปลอดภัย
