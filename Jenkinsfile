@@ -1,8 +1,6 @@
 pipeline {
-    // ใช้ agent any เพื่อให้รันบนเครื่องหลักได้เลย ไม่ต้องรอคิว k8s-agent-1
     agent any
 
-    // เรียกใช้ Docker Tool ที่เราไปสร้างไว้ใน Manage Jenkins > Tools
     tools {
         dockerTool 'docker-cli'
     }
@@ -12,13 +10,10 @@ pipeline {
     }
 
     environment {
-        // ⚠️ สำคัญมาก: เปลี่ยนตรงนี้เป็น Username ของ Docker Hub ของคุณ
+        // ตั้งค่าตัวแปรต่างๆ ให้เรียบร้อย
         DOCKER_USER = 'narin7'
-        
         APP_NAME    = 'my-nginx-web'
         IMAGE_TAG   = "${BUILD_NUMBER}"
-        
-        // ชี้เป้าหมายให้ Jenkins วิ่งทะลุไปหา Docker Desktop บน Windows
         DOCKER_HOST = 'tcp://host.docker.internal:2375'
     }
 
@@ -31,7 +26,6 @@ pipeline {
 
         stage('Build & Push Docker Image') {
             steps {
-                // เพิ่มบล็อก withCredentials เพื่อดึงรหัสผ่านที่เราตั้งไว้มาใช้งาน
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER_ID')]) {
                     script {
                         sh '''
@@ -42,15 +36,12 @@ pipeline {
                             export PATH=$PATH:$(pwd)/docker
                         fi
                         
-                        # 1. ล็อกอินเข้า Docker Hub ก่อน
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER_ID" --password-stdin
                         
-                        # 2. Build Image
-                        docker build -t narin7/my-nginx-web:${BUILD_NUMBER} -t narin7/my-nginx-web:latest .
+                        docker build -t ${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG} -t ${DOCKER_USER}/${APP_NAME}:latest .
                         
-                        # 3. Push Image (คราวนี้จะผ่านแล้วเพราะล็อกอินแล้ว!)
-                        docker push narin7/my-nginx-web:${BUILD_NUMBER}
-                        docker push narin7/my-nginx-web:latest
+                        docker push ${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG}
+                        docker push ${DOCKER_USER}/${APP_NAME}:latest
                         '''
                     }
                 }
@@ -62,25 +53,22 @@ pipeline {
                 withCredentials([string(credentialsId: 'kubeconfig-local', variable: 'KUBECONFIG_TXT')]) {
                     script {
                         sh '''
-                        # 1. โหลดโปรแกรม kubectl มาไว้ในโปรเจกต์ (ถ้ายังไม่มี)
                         if [ ! -f "./kubectl" ]; then
                             echo "Downloading kubectl..."
                             curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
                             chmod +x ./kubectl
                         fi
                         
-                        # 2. เตรียมไฟล์กุญแจ Kubeconfig
                         echo "$KUBECONFIG_TXT" > kubeconfig_tmp
                         export KUBECONFIG=$(pwd)/kubeconfig_tmp
                         
-                        # 3. เริ่ม Deploy (สังเกตว่าเราจะใช้ ./kubectl แทน kubectl เฉยๆ)
-                        # ⚠️ สำคัญ: ถ้าไฟล์ของคุณอยู่ในโฟลเดอร์ jenkins ให้เปลี่ยนคำว่า k8s เป็น jenkins ด้วยนะครับ
+                        # รันไฟล์ YAML (ถ้าโฟลเดอร์ใน GitHub ของคุณชื่ออื่นที่ไม่ใช่ jenkins/ ให้แก้ตรงนี้ด้วยนะครับ)
                         ./kubectl apply -f jenkins/deployment.yaml
                         ./kubectl apply -f jenkins/service.yaml
                         ./kubectl apply -f jenkins/ingress.yaml
                         
-                        # สั่งอัปเดต Image เป็นเวอร์ชันล่าสุดที่เพิ่ง Build
-                        ./kubectl set image deployment/nginx-deployment nginx-container=narin7/my-nginx-web:${BUILD_NUMBER}
+                        # อัปเดตเวอร์ชัน Image
+                        ./kubectl set image deployment/nginx-deployment nginx-container=${DOCKER_USER}/${APP_NAME}:${IMAGE_TAG}
                         '''
                     }
                 }
@@ -94,10 +82,7 @@ pipeline {
                         sh '''
                         export KUBECONFIG=$(pwd)/kubeconfig_tmp
                         
-                        # รอเช็คสถานะว่า Pods รันขึ้นมาครบไหม (ใช้ ./kubectl เช่นกัน)
                         ./kubectl rollout status deployment/nginx-deployment --timeout=120s
-                        
-                        # ดูสถานะต่างๆ
                         ./kubectl get pods
                         ./kubectl get svc
                         ./kubectl get ingress
@@ -106,9 +91,10 @@ pipeline {
                 }
             }
         }
+    }
+
     post {
         always {
-            // ทำความสะอาด ลบไฟล์กุญแจทิ้งทุกครั้งที่รันเสร็จเพื่อความปลอดภัย
             sh "rm -f kubeconfig_tmp || true"
         }
         success {
