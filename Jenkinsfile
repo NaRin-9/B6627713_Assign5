@@ -49,7 +49,6 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                // เปลี่ยนมาใช้แบบ file และเรียกชื่อ ID ใหม่
                 withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG_PATH')]) {
                     script {
                         sh '''
@@ -59,8 +58,15 @@ pipeline {
                             chmod +x ./kubectl
                         fi
                         
-                        # ชี้ที่อยู่ไฟล์ไปที่ที่ Jenkins เตรียมไว้ให้เลย ไม่ต้อง echo สร้างไฟล์เองแล้ว
-                        export KUBECONFIG=$KUBECONFIG_PATH
+                        # 1. ก๊อปปี้ไฟล์กุญแจมาไว้ชั่วคราว
+                        cp $KUBECONFIG_PATH ./kubeconfig_tmp
+                        
+                        # 2. แอบเปลี่ยน IP จาก 127.0.0.1 เป็น host.docker.internal เพื่อให้ทะลุออกไปหา Windows
+                        sed -i 's/127.0.0.1/host.docker.internal/g' ./kubeconfig_tmp
+                        sed -i 's/0.0.0.0/host.docker.internal/g' ./kubeconfig_tmp
+                        
+                        # 3. ชี้ให้ kubectl มาใช้ไฟล์กุญแจที่แก้ IP แล้ว
+                        export KUBECONFIG=$(pwd)/kubeconfig_tmp
                         
                         ./kubectl apply -f k8s/deployment.yaml
                         ./kubectl apply -f k8s/service.yaml
@@ -78,7 +84,11 @@ pipeline {
                 withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG_PATH')]) {
                     script {
                         sh '''
-                        export KUBECONFIG=$KUBECONFIG_PATH
+                        # ทำเหมือนกันในขั้นตอนนี้
+                        cp $KUBECONFIG_PATH ./kubeconfig_tmp
+                        sed -i 's/127.0.0.1/host.docker.internal/g' ./kubeconfig_tmp
+                        sed -i 's/0.0.0.0/host.docker.internal/g' ./kubeconfig_tmp
+                        export KUBECONFIG=$(pwd)/kubeconfig_tmp
                         
                         ./kubectl rollout status deployment/nginx-deployment --timeout=120s
                         ./kubectl get pods
@@ -89,7 +99,6 @@ pipeline {
                 }
             }
         }
-    }
 
     post {
         success {
